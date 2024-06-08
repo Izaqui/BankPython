@@ -7,3 +7,7 @@
 * Operação de Saque
 
 * Operação de Impressão de Extrato
+
+* Operação de criar usuario
+
+* Função conta corrente e conta poupança
