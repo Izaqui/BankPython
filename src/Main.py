@@ -1,91 +1,125 @@
-class Usuario:
-    def __init__(self, nome, cpf, data_nascimento):
-        self.nome = nome
-        self.cpf = cpf
-        self.data_nascimento = data_nascimento
+from abc import ABC, abstractmethod
+from datetime import date
+
+class Historico:
+    def __init__(self):
+        self.transacoes = []
+    
+    def adicionar_transacao(self, transacao):
+        self.transacoes.append(transacao)
+
+class Transacao(ABC):
+    @abstractmethod
+    def registrar(self, conta):
+        pass
+
+class Deposito(Transacao):
+    def __init__(self, valor):
+        self.valor = valor
+
+    def registrar(self, conta):
+        conta.saldo += self.valor
+        conta.historico.adicionar_transacao(self)
+
+class Saque(Transacao):
+    def __init__(self, valor):
+        self.valor = valor
+
+    def registrar(self, conta):
+        conta.saldo -= self.valor
+        conta.historico.adicionar_transacao(self)
 
 class Conta:
-    def __init__(self, usuario):
-        self.usuario = usuario
+    def __init__(self, cliente, numero, agencia):
         self.saldo = 0.0
-        self.depositos = []
-        self.saques = []
+        self.numero = numero
+        self.agencia = agencia
+        self.cliente = cliente
+        self.historico = Historico()
 
+    def saldo(self):
+        return self.saldo
+    
+    def nova_conta(cliente, numero, agencia):
+        return Conta(cliente, numero, agencia)
+    
+    def sacar(self, valor):
+        if valor > self.saldo:
+            return False
+        saque = Saque(valor)
+        saque.registrar(self)
+        return True
+    
     def depositar(self, valor):
-        if valor > 0:
-            self.saldo += valor
-            self.depositos.append(valor)
-            print(f'Depósito de R$ {valor:.2f} realizado com sucesso.')
-        else:
-            print('O valor do depósito deve ser positivo.')
-
-    def extrato(self):
-        extrato = ""
-        if not self.depositos and not self.saques:
-            extrato = "Não foram realizadas movimentações."
-        else:
-            for deposito in self.depositos:
-                extrato += f'Depósito: R$ {deposito:.2f}\n'
-            for saque in self.saques:
-                extrato += f'Saque: R$ {saque:.2f}\n'
-        
-        print("\n================ EXTRATO ================")
-        print(f"Titular: {self.usuario.nome}")
-        print(f"CPF: {self.usuario.cpf}")
-        print(f"Data de Nascimento: {self.usuario.data_nascimento}")
-        print(extrato)
-        print(f"\nSaldo: R$ {self.saldo:.2f}")
-        print("==========================================")
+        deposito = Deposito(valor)
+        deposito.registrar(self)
+        return True
 
 class ContaCorrente(Conta):
-    def __init__(self, usuario):
-        super().__init__(usuario)
+    def __init__(self, cliente, numero, agencia, limite, limite_saques):
+        super().__init__(cliente, numero, agencia)
+        self.limite = limite
+        self.limite_saques = limite_saques
         self.saques_diarios = 0
 
     def sacar(self, valor):
-        if self.saques_diarios >= 3:
+        if self.saques_diarios >= self.limite_saques:
             print('Limite de saques diários atingido.')
-        elif valor > 500:
+            return False
+        if valor > self.limite:
             print('O valor máximo para saque é R$ 500,00.')
-        elif valor > self.saldo:
-            print('Saldo insuficiente.')
-        else:
-            self.saldo -= valor
-            self.saques.append(valor)
+            return False
+        if super().sacar(valor):
             self.saques_diarios += 1
-            print(f'Saque de R$ {valor:.2f} realizado com sucesso.')
+            return True
+        return False
 
     def resetar_saques_diarios(self):
         self.saques_diarios = 0
 
-class ContaPoupanca(Conta):
-    def sacar(self, valor):
-        if valor > self.saldo:
-            print('Saldo insuficiente.')
-        else:
-            self.saldo -= valor
-            self.saques.append(valor)
-            print(f'Saque de R$ {valor:.2f} realizado com sucesso.')
+class Cliente:
+    def __init__(self, endereco):
+        self.endereco = endereco
+        self.contas = []
+
+    def realizar_transacao(self, conta, transacao):
+        transacao.registrar(conta)
+    
+    def adicionar_conta(self, conta):
+        self.contas.append(conta)
+
+class PessoaFisica(Cliente):
+    def __init__(self, endereco, cpf, nome, data_nascimento):
+        super().__init__(endereco)
+        self.cpf = cpf
+        self.nome = nome
+        self.data_nascimento = data_nascimento
 
 def criar_usuario():
     nome = input("Digite o nome do usuário: ")
     cpf = input("Digite o CPF do usuário: ")
     data_nascimento = input("Digite a data de nascimento do usuário (dd/mm/aaaa): ")
-    return Usuario(nome, cpf, data_nascimento)
+    endereco = input("Digite o endereço do usuário: ")
+    return PessoaFisica(endereco, cpf, nome, data_nascimento)
 
-def criar_conta(usuario):
+def criar_conta(cliente):
+    numero = int(input("Digite o número da conta: "))
+    agencia = input("Digite a agência da conta: ")
     tipo_conta = input("Escolha o tipo de conta a ser criada:\n[c] Conta Corrente\n[p] Conta Poupança\n=> ").lower()
     if tipo_conta == 'c':
-        return ContaCorrente(usuario)
+        limite = float(input("Digite o limite da conta corrente: "))
+        limite_saques = int(input("Digite o limite de saques diários: "))
+        return ContaCorrente(cliente, numero, agencia, limite, limite_saques)
     elif tipo_conta == 'p':
-        return ContaPoupanca(usuario)
+        return Conta(cliente, numero, agencia)
     else:
         print("Opção inválida. Tente novamente.")
-        return criar_conta(usuario)
+        return criar_conta(cliente)
 
 def main():
     usuario = criar_usuario()
     conta = criar_conta(usuario)
+    usuario.adicionar_conta(conta)
     menu = """
 [d] Depositar
 [s] Sacar
@@ -106,7 +140,7 @@ def main():
             conta.sacar(valor)
         
         elif opcao == 'e':
-            conta.extrato()
+            conta.historico.extrato()
         
         elif opcao == 'q':
             print("Saindo do sistema. Até logo!")
